@@ -117,16 +117,6 @@ def create_rag_chain():
     llm = get_llm()
     from langchain_core.messages import HumanMessage, SystemMessage
 
-    # messages = [
-    #     SystemMessagePromptTemplate.from_template("""Given a chat history and the latest user question \
-    #  which might reference context in the chat history, formulate a standalone question \
-    #  which can be understood without the chat history. Do NOT answer the question, \
-    #  just reformulate it if needed and otherwise return it as is."""),
-    #     HumanMessagePromptTemplate.from_template("{input}")
-    # ]
-
-    #contextualize_q_prompt = ChatPromptTemplate.from_messages(messages)
-
     contextualize_q_system_prompt = """Given a chat history and the latest user question \
     which might reference context in the chat history, formulate a standalone question \
     which can be understood without the chat history. Do NOT answer the question, \
