@@ -1,0 +1,201 @@
+# RETRIEVAL-AUGMENTED GENERATION (RAG)
+# ***
+
+
+# SPECIFIC ACTIONS:
+#  1. USE PDF LOADER TO LOAD THE PDF AND PROCESS THE TEXT
+#  2. CREATE A VECTOR DATABASE TO STORE KNOWLEDGE FROM THE PDF
+#  3. CREATE A WEB APP THAT INCORPORATES Q&A AND CHAT MEMORY
+
+# !pip install "ibm-watsonx-ai>=1.0.1" | tail -n 1
+# !pip install langchain | tail -n 1
+# !pip install langchain-community | tail -n 1
+# !pip install langchain-ibm | tail -n 1
+# !pip install langchainhub | tail -n 1
+# !pip install chromadb | tail -n 1
+# !pip install langgraph | tail -n 1
+
+# # need to visualize the graph
+# !pip install pygraphviz | tail -n 1
+# # need to download content from webpages
+# !pip install bs4 | tail -n 1 
+
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import CharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+import pandas as pd
+import yaml
+from pprint import pprint
+import boto3
+import json
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+
+
+import os
+from dotenv import load_dotenv
+# Load the .env file
+load_dotenv()
+
+# Function to read and print all environment variables
+def read_env_variables():
+    print("Environment variables:")
+    for key, value in os.environ.items():
+        print(f"{key}: {value}")
+
+
+# Function to get a specific environment variable
+def get_env_variable(key):
+    value = os.getenv(key)
+    if value is not None:
+        #print(f"{key}: {value}")
+        return value
+    else:
+        print(f"Environment variable '{key}' not found")
+
+aws_access_key_id = get_env_variable("aws_access_key_id")
+aws_secret_access_keys = get_env_variable("aws_secret_access_keys")
+
+
+# Configuration
+region_name = 'us-west-2'
+pdf_path = "./data/"
+session = boto3.Session(aws_access_key_id=aws_access_key_id,aws_secret_access_key=aws_secret_access_keys , region_name='us-west-2')
+bedrock = session.client(service_name='bedrock-runtime',verify=False)
+
+from langchain_community.document_loaders import PyPDFDirectoryLoader
+
+def get_documents(pdf_path):
+    loader=PyPDFDirectoryLoader(pdf_path)
+    documents=loader.load()
+    text_splitter=RecursiveCharacterTextSplitter(chunk_size=1000,
+                                                 #chunk_overlap=
+                                                 )
+    
+    docs=text_splitter.split_documents(documents)
+    return docs
+
+from langchain_community.embeddings import BedrockEmbeddings
+
+bedrock_embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0", client=bedrock)
+
+
+
+def get_vector_store(docs):
+    vectorstore = Chroma.from_documents(
+    docs, 
+    persist_directory=(os.path.join(pdf_path+"chroma_index")),
+    embedding=bedrock_embeddings
+)
+
+
+get_vector_store(docs=get_documents(pdf_path))
+
+vectorstore = Chroma(
+    persist_directory=(os.path.join(pdf_path+"chroma_index")),
+    embedding_function=bedrock_embeddings
+)
+
+retriever = vectorstore.as_retriever()
+
+retriever
+
+#######################################################################################################################
+### TESTING
+#######################################################################################################################
+from langchain_community.chat_models import BedrockChat
+
+# Function to create a Bedrock LangChain client.
+def get_llm():
+    try:
+        #session = boto3.Session(profile_name=profile_name, region_name=region_name) 
+        #bedrock = session.client(service_name='bedrock-runtime', region_name=region_name) 
+
+        model_kwargs = {
+            #"max_tokens": 512,
+            "temperature": 0,
+            "maxTokenCount": 4096,
+            "stopSequences": ["User:"],
+            "temperature": 0,
+            "topP": 0.9
+            #"top_k": 250,
+            #"top_p": 1,
+            #"stop_sequences": ["\n\nHuman:"]
+        }
+        llm = BedrockChat(
+            model_id="amazon.titan-text-express-v1",
+            model_kwargs=model_kwargs,
+            client=bedrock
+            #credentials_profile_name=profile_name,
+            #region_name=region_name
+        )
+        return llm
+    except NoCredentialsError:
+        print("No AWS credentials found. Please configure your AWS credentials.")
+    except PartialCredentialsError:
+        print("Incomplete AWS credentials found. Please check your AWS credentials.")
+    except Exception as e:
+        print(f"An error occurred while creating the Bedrock client: {e}")
+
+
+llm = get_llm()
+
+
+# RAG LLM Model
+
+template = """Given a chat history and the latest user question \
+    which might reference context in the chat history,  Rewrite the following question in a different way, without answering it: \
+
+Query: {question}
+
+Rewritten question:"""
+
+
+
+prompt = ChatPromptTemplate.from_template(template)
+
+
+
+rag_chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+
+result = rag_chain.invoke("How can I get lower rates?")
+
+pprint(result)
+
+result = rag_chain.invoke("elaborate on theory of relativity ?")
+
+pprint(result)
+
+
+chat = BedrockChat(
+    model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+    model_kwargs={'temperature': 0.0},
+    client=bedrock
+)
+
+from langchain.chains import ConversationalRetrievalChain
+
+# Chain
+chain = ConversationalRetrievalChain.from_llm(
+    llm=chat,
+    chain_type="stuff",
+    retriever=vectorstore.as_retriever(),
+    return_generated_question=True,
+    verbose=False,
+)
+
+# Request
+response = chain.invoke({
+    'question': "How does drive work",
+    'chat_history': []})
+print(response['answer'])
