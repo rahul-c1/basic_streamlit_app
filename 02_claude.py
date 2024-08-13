@@ -52,7 +52,7 @@ def get_env_variable(key):
 aws_access_key_id = get_env_variable("aws_access_key_id")
 aws_secret_access_keys = get_env_variable("aws_secret_access_keys")
 
-pdf_path = "C://Users/rasharma/OneDrive - Santander Office 365/Documents/CRM/Ad-hoc Request/Pending/Drivebot WatsonX/data/"
+pdf_path = "./data/"
 
 
 # Configuration
