@@ -211,35 +211,3 @@ with view_messages:
     Contents of `st.session_state.langchain_messages`:
     """
     view_messages.json(st.session_state.langchain_messages)
-
-
-
-
-    # claude_prompt1 = f"\n\nuser:{contextualize_q_system_prompt}\n\nAssistant:"
-    # message = [{"role": "user", "content": f"Rewrite the following question in a different way, without answering it:\n\nQuestion: {question}\n\nRewritten question:"} ]
-
-
-    # contextualize_q_prompt = ChatPromptTemplate.from_messages([
-    #     ("system", claude_prompt1),
-    #     MessagesPlaceholder("chat_history"),
-    #     ("human", "{input}"),
-    # ])
-    
-    # history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
-
-    # # * 2. Answer question based on Chat Context
-    # qa_system_prompt = """You are an assistant for question-answering tasks. \
-    # Use the following pieces of retrieved context to answer the question. \
-    # If you don't know the answer, just say that you don't know. \
-    # Use three sentences maximum and keep the answer concise.\
-
-    # {context}"""
-    
-    # claude_prompt2 = f"\n\nuser:{qa_system_prompt}\n\nAssistant:"
-
-    # qa_prompt = ChatPromptTemplate.from_messages([
-    #     ("system", claude_prompt2),
-    #     MessagesPlaceholder("chat_history"),
-    #     ("human", "{input}")
-    # ])
-    
